@@ -25,7 +25,7 @@ CREATE TABLE study_room (
     remark VARCHAR(200) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 座位表
+-- 座位表（seat_status：0空闲 1已预约 2使用中 3故障）
 CREATE TABLE seat (
     seat_id INT PRIMARY KEY AUTO_INCREMENT,
     room_id INT NOT NULL,
@@ -47,14 +47,35 @@ CREATE TABLE reservation (
     CONSTRAINT fk_res_seat FOREIGN KEY (seat_id) REFERENCES seat (seat_id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 初始数据
+-- 初始账号
 INSERT INTO admin (username, password) VALUES ('admin', '123456');
 INSERT INTO student (username, password, student_name) VALUES
 ('stu01', '123456', '张三'),
 ('stu02', '123456', '李四');
+
+-- 两间自习室
 INSERT INTO study_room (room_name, remark) VALUES
 ('图书馆自习室A', '一楼安静区'),
 ('教学楼自习室B', '三楼');
+
+-- 每间 30 个座位（6 列 × 5 排，第 2、4 列后为过道）
 INSERT INTO seat (room_id, seat_no) VALUES
-(1, 'A01'), (1, 'A02'), (1, 'A03'),
-(2, 'B01'), (2, 'B02');
+(1, 'A01'), (1, 'A02'), (1, 'A03'), (1, 'A04'), (1, 'A05'), (1, 'A06'),
+(1, 'A07'), (1, 'A08'), (1, 'A09'), (1, 'A10'), (1, 'A11'), (1, 'A12'),
+(1, 'A13'), (1, 'A14'), (1, 'A15'), (1, 'A16'), (1, 'A17'), (1, 'A18'),
+(1, 'A19'), (1, 'A20'), (1, 'A21'), (1, 'A22'), (1, 'A23'), (1, 'A24'),
+(1, 'A25'), (1, 'A26'), (1, 'A27'), (1, 'A28'), (1, 'A29'), (1, 'A30'),
+(2, 'B01'), (2, 'B02'), (2, 'B03'), (2, 'B04'), (2, 'B05'), (2, 'B06'),
+(2, 'B07'), (2, 'B08'), (2, 'B09'), (2, 'B10'), (2, 'B11'), (2, 'B12'),
+(2, 'B13'), (2, 'B14'), (2, 'B15'), (2, 'B16'), (2, 'B17'), (2, 'B18'),
+(2, 'B19'), (2, 'B20'), (2, 'B21'), (2, 'B22'), (2, 'B23'), (2, 'B24'),
+(2, 'B25'), (2, 'B26'), (2, 'B27'), (2, 'B28'), (2, 'B29'), (2, 'B30');
+
+-- 故障座位示例
+UPDATE seat SET seat_status = 3 WHERE room_id = 1 AND seat_no IN ('A05', 'A06');
+
+-- 演示：李四已预约明天 09:00-11:00 的 A01
+INSERT INTO reservation (student_id, seat_id, start_time, end_time, res_status)
+VALUES (2, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '09:00:00'),
+        TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '11:00:00'), 0);
+UPDATE seat SET seat_status = 1 WHERE seat_id = 1;

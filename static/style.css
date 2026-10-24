@@ -1,0 +1,103 @@
+body {
+    background: #f6f7f9;
+}
+
+/* 首页 */
+.hero {
+    padding: 90px 0 70px;
+    text-align: center;
+    background: #fff;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.hero h1 {
+    font-size: 34px;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.hero p {
+    color: #6b7280;
+    margin: 16px 0 34px;
+}
+
+.hero .btn {
+    min-width: 150px;
+    margin: 0 6px;
+}
+
+/* 座位平面图 */
+.seat-map {
+    border-left: 4px solid #dee2e6;
+    padding-left: 12px;
+}
+
+.seat-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+    align-items: center;
+}
+
+.seat {
+    width: 46px;
+    height: 42px;
+    padding: 0;
+    border: 1px solid rgba(0, 0, 0, .12);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 12px;
+}
+
+.seat:hover {
+    opacity: .85;
+}
+
+.seat.state-0 {
+    background: #28a745;
+}
+
+.seat.state-1 {
+    background: #0d6efd;
+}
+
+.seat.state-2 {
+    background: #dc3545;
+}
+
+.seat.state-3 {
+    background: #6c757d;
+}
+
+.aisle {
+    width: 18px;
+    color: #adb5bd;
+    font-size: 10px;
+    text-align: center;
+    writing-mode: vertical-rl;
+}
+
+.legend .dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 4px;
+    border-radius: 3px;
+    vertical-align: -1px;
+}
+
+.dot-0 {
+    background: #28a745;
+}
+
+.dot-1 {
+    background: #0d6efd;
+}
+
+.dot-2 {
+    background: #dc3545;
+}
+
+.dot-3 {
+    background: #6c757d;
+}

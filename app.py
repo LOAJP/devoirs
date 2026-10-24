@@ -7,6 +7,7 @@ from flask import Flask, flash, redirect, render_template, request, session, url
 
 app = Flask(__name__)
 app.secret_key = 'study-room-demo-key'
+app.json.ensure_ascii = False   # 页面内提示信息按中文原样输出
 
 DB_CONFIG = {
     'host': '127.0.0.1',
@@ -17,6 +18,10 @@ DB_CONFIG = {
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor,
 }
+
+SEAT_COLS = 6            # 每排座位数
+SEAT_AISLES = (1, 3)     # 第几个座位后留过道
+SEAT_STATE_TEXT = {0: '空闲', 1: '已预约', 2: '使用中', 3: '故障'}
 
 
 # ---------- 数据库工具 ----------
@@ -52,22 +57,12 @@ def execute(sql, args=()):
 
 
 # ---------- 权限装饰器 ----------
-def login_required(view):
-    @wraps(view)
-    def wrapper(*args, **kwargs):
-        if not session.get('role'):
-            flash('请先登录')
-            return redirect(url_for('login'))
-        return view(*args, **kwargs)
-    return wrapper
-
-
 def student_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
         if session.get('role') != 'student':
-            flash('请以学生身份登录')
-            return redirect(url_for('login'))
+            flash('请先登录学生账号')
+            return redirect(url_for('student_login'))
         return view(*args, **kwargs)
     return wrapper
 
@@ -76,13 +71,13 @@ def admin_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
         if session.get('role') != 'admin':
-            flash('请以管理员身份登录')
-            return redirect(url_for('login'))
+            flash('请先登录管理员账号')
+            return redirect(url_for('admin_login'))
         return view(*args, **kwargs)
     return wrapper
 
 
-# ---------- 座位状态辅助 ----------
+# ---------- 座位与预约辅助 ----------
 def release_expired_seats():
     """惰性释放：有效预约全部结束的座位恢复空闲"""
     execute("""UPDATE seat s SET s.seat_status = 0
@@ -109,82 +104,143 @@ def parse_time(value):
         return None
 
 
-# ---------- 公共 ----------
+def seat_state(seat, active, now):
+    """0空闲 1已预约 2使用中 3故障"""
+    st = seat['seat_status']
+    if st in (2, 3):
+        return st
+    if st == 1:
+        res = active.get(seat['seat_id'])
+        if res and res['start_time'] <= now < res['end_time']:
+            return 2
+        return 1
+    return 0
+
+
+def build_seat_map():
+    """按自习室生成可视化座位排布数据"""
+    release_expired_seats()
+    rooms = query('SELECT * FROM study_room ORDER BY room_id')
+    seats = query('SELECT * FROM seat ORDER BY room_id, seat_id')
+    active = {r['seat_id']: r for r in query(
+        "SELECT seat_id, start_time, end_time FROM reservation WHERE res_status = 0 AND end_time > NOW()")}
+    now = datetime.now()
+
+    room_seats = {}
+    for seat in seats:
+        room_seats.setdefault(seat['room_id'], []).append(seat)
+
+    result = []
+    for room in rooms:
+        items = room_seats.get(room['room_id'], [])
+        rows, row, free = [], [], 0
+        for index, seat in enumerate(items):
+            state = seat_state(seat, active, now)
+            free += 1 if state == 0 else 0
+            row.append({'seat': seat, 'state': state, 'text': SEAT_STATE_TEXT[state],
+                        'aisle': index % SEAT_COLS in SEAT_AISLES})
+            if len(row) == SEAT_COLS:
+                rows.append(row)
+                row = []
+        if row:
+            rows.append(row)
+        result.append({'room': room, 'rows': rows, 'free': free, 'total': len(items)})
+    return result
+
+
+def res_state_text(row, now):
+    if row['res_status'] == 1:
+        return '已取消'
+    if now >= row['end_time']:
+        return '已过期'
+    if now >= row['start_time']:
+        return '使用中'
+    return '已预约'
+
+
+# ---------- 公共入口 ----------
 @app.route('/')
 def index():
     if session.get('role') == 'admin':
         return redirect(url_for('admin_index'))
     if session.get('role') == 'student':
         return redirect(url_for('student_index'))
-    return redirect(url_for('login'))
+    return render_template('index.html')
 
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
+@app.route('/student/login', methods=['GET', 'POST'])
+def student_login():
     if request.method == 'POST':
-        role = request.form.get('role', 'student')
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
-        if not username or not password:
-            flash('账号和密码不能为空')
-            return redirect(url_for('login'))
-        if role == 'admin':
-            row = query('SELECT * FROM admin WHERE username=%s AND password=%s',
-                        (username, password), one=True)
-        else:
-            row = query('SELECT * FROM student WHERE username=%s AND password=%s',
-                        (username, password), one=True)
+        row = query('SELECT * FROM student WHERE username=%s AND password=%s',
+                    (username, password), one=True)
         if not row:
             flash('账号或密码错误')
-            return redirect(url_for('login'))
+            return redirect(url_for('student_login'))
         session.clear()
-        session['role'] = role
-        if role == 'admin':
-            session['user_id'] = row['admin_id']
-            session['username'] = row['username']
-            return redirect(url_for('admin_index'))
+        session['role'] = 'student'
         session['user_id'] = row['student_id']
         session['username'] = row['username']
         session['student_name'] = row['student_name']
         return redirect(url_for('student_index'))
-    return render_template('login.html')
+    return render_template('student_login.html')
 
 
-@app.route('/register', methods=['POST'])
-def register():
-    username = request.form.get('username', '').strip()
-    password = request.form.get('password', '').strip()
-    student_name = request.form.get('student_name', '').strip()
-    if not username or not password or not student_name:
-        flash('注册信息不能为空')
-    elif len(username) > 50 or len(password) > 50 or len(student_name) > 50:
-        flash('账号、密码、姓名均不能超过50个字符')
-    elif query('SELECT student_id FROM student WHERE username=%s', (username,), one=True):
-        flash('该账号已被注册')
-    else:
-        execute('INSERT INTO student (username, password, student_name) VALUES (%s, %s, %s)',
-                (username, password, student_name))
-        flash('注册成功，请登录')
-    return redirect(url_for('login'))
+@app.route('/student/register', methods=['GET', 'POST'])
+def student_register():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        student_name = request.form.get('student_name', '').strip()
+        if not username or not password or not student_name:
+            flash('注册信息不能为空')
+        elif len(username) > 50 or len(password) > 50 or len(student_name) > 50:
+            flash('账号、密码、姓名均不能超过50个字符')
+        elif query('SELECT student_id FROM student WHERE username=%s', (username,), one=True):
+            flash('该账号已被注册')
+        else:
+            execute('INSERT INTO student (username, password, student_name) VALUES (%s, %s, %s)',
+                    (username, password, student_name))
+            flash('注册成功，请登录')
+            return redirect(url_for('student_login'))
+        return redirect(url_for('student_register'))
+    return render_template('student_register.html')
+
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        row = query('SELECT * FROM admin WHERE username=%s AND password=%s',
+                    (username, password), one=True)
+        if not row:
+            flash('账号或密码错误')
+            return redirect(url_for('admin_login'))
+        session.clear()
+        session['role'] = 'admin'
+        session['user_id'] = row['admin_id']
+        session['username'] = row['username']
+        return redirect(url_for('admin_index'))
+    return render_template('admin_login.html')
 
 
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('login'))
+    return redirect(url_for('index'))
 
 
 # ---------- 学生端 ----------
 @app.route('/student/index')
 @student_required
 def student_index():
-    release_expired_seats()
-    rooms = query('SELECT * FROM study_room ORDER BY room_id')
-    rows = query('SELECT seat_id, room_id, seat_no FROM seat WHERE seat_status=0 ORDER BY seat_no')
-    free_seats = {}
-    for row in rows:
-        free_seats.setdefault(row['room_id'], []).append(row)
-    return render_template('student_index.html', rooms=rooms, free_seats=free_seats)
+    rooms = build_seat_map()
+    hold = query("""SELECT res_id FROM reservation
+                    WHERE student_id=%s AND res_status=0 AND end_time>NOW()""",
+                 (session['user_id'],), one=True)
+    return render_template('student_index.html', rooms=rooms, has_active=bool(hold))
 
 
 @app.route('/student/reserve', methods=['POST'])
@@ -200,6 +256,10 @@ def student_reserve():
         flash('开始时间不能早于当前时间')
     elif end_time <= start_time:
         flash('结束时间必须晚于开始时间')
+    elif query("""SELECT res_id FROM reservation
+                  WHERE student_id=%s AND res_status=0 AND end_time>NOW()""",
+               (session['user_id'],), one=True):
+        flash('您当前已有有效预约，无法重复预约，请先取消已有预约或等待预约结束')
     else:
         seat = query('SELECT * FROM seat WHERE seat_id=%s', (seat_id,), one=True)
         conflict = query("""SELECT res_id FROM reservation
@@ -230,7 +290,10 @@ def student_reservations():
                     JOIN study_room sr ON s.room_id = sr.room_id
                     WHERE r.student_id = %s
                     ORDER BY r.res_id DESC""", (session['user_id'],))
-    return render_template('reserve_list.html', reservations=rows, now=datetime.now(), admin_view=False)
+    now = datetime.now()
+    for row in rows:
+        row['state_text'] = res_state_text(row, now)
+    return render_template('reserve_list.html', reservations=rows, now=now, admin_view=False)
 
 
 @app.route('/student/cancel/<int:res_id>', methods=['POST'])
@@ -247,7 +310,7 @@ def student_cancel(res_id):
     else:
         execute('UPDATE reservation SET res_status=1 WHERE res_id=%s', (res_id,))
         release_seat(row['seat_id'])
-        flash('取消成功')
+        flash('取消成功，座位已释放')
     return redirect(url_for('student_reservations'))
 
 
@@ -319,7 +382,8 @@ def seat_manage():
     if room_id is None and rooms:
         room_id = rooms[0]['room_id']
     seats = query('SELECT * FROM seat WHERE room_id=%s ORDER BY seat_id', (room_id,)) if room_id else []
-    return render_template('seat_manage.html', rooms=rooms, seats=seats, room_id=room_id)
+    return render_template('seat_manage.html', rooms=rooms, seats=seats, room_id=room_id,
+                           state_text=SEAT_STATE_TEXT)
 
 
 @app.route('/admin/seat/add', methods=['POST'])
@@ -361,7 +425,7 @@ def seat_delete(seat_id):
 def seat_status():
     seat_id = request.form.get('seat_id', type=int)
     status = request.form.get('seat_status', type=int)
-    if not seat_id or status not in (0, 1):
+    if not seat_id or status not in (0, 1, 2, 3):
         flash('参数错误')
     else:
         execute('UPDATE seat SET seat_status=%s WHERE seat_id=%s', (status, seat_id))
@@ -380,7 +444,10 @@ def admin_reservations():
                     JOIN seat s ON r.seat_id = s.seat_id
                     JOIN study_room sr ON s.room_id = sr.room_id
                     ORDER BY r.res_id DESC""")
-    return render_template('reserve_list.html', reservations=rows, now=datetime.now(), admin_view=True)
+    now = datetime.now()
+    for row in rows:
+        row['state_text'] = res_state_text(row, now)
+    return render_template('reserve_list.html', reservations=rows, now=now, admin_view=True)
 
 
 @app.route('/admin/reservation/cancel/<int:res_id>', methods=['POST'])
@@ -394,7 +461,7 @@ def admin_cancel(res_id):
     else:
         execute('UPDATE reservation SET res_status=1 WHERE res_id=%s', (res_id,))
         release_seat(row['seat_id'])
-        flash('已取消该预约')
+        flash('已取消该预约，座位已释放')
     return redirect(url_for('admin_reservations'))
 
 

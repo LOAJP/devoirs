@@ -2,10 +2,11 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>学生首页 - 自习室座位预约</title>
+    <title>自习室座位分布 - 座位预约</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
 </head>
-<body class="bg-light">
+<body>
 <nav class="navbar navbar-expand navbar-dark bg-primary">
     <div class="container">
         <span class="navbar-brand">自习室座位预约</span>
@@ -19,50 +20,43 @@
 </nav>
 
 <div class="container mt-4">
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            {% for msg in messages %}
-                <div class="alert alert-info py-2">{{ msg }}</div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+    {% if has_active %}
+    <div class="alert alert-warning py-2">您当前已有有效预约，需先取消或等其结束后才能预约新座位。</div>
+    {% endif %}
 
-    <h5 class="mb-3">自习室列表</h5>
-    {% for room in rooms %}
-    <div class="card mb-3">
+    <h5 class="mb-3">自习室座位分布</h5>
+    {% for item in rooms %}
+    <div class="card mb-4">
         <div class="card-header">
-            <strong>{{ room.room_name }}</strong>
-            {% if room.remark %}<span class="text-muted small ms-2">{{ room.remark }}</span>{% endif %}
+            <strong>{{ item.room.room_name }}</strong>
+            {% if item.room.remark %}<span class="text-muted small ms-2">{{ item.room.remark }}</span>{% endif %}
+            <span class="badge bg-light text-dark ms-2">空闲 {{ item.free }} / 共 {{ item.total }}</span>
         </div>
         <div class="card-body">
-            {% set seats = free_seats.get(room.room_id, []) %}
-            <p class="mb-2">空闲座位：
-                {% if seats %}
-                    {% for seat in seats %}<span class="badge bg-success me-1">{{ seat.seat_no }}</span>{% endfor %}
-                {% else %}
-                    <span class="text-muted">暂无空闲座位</span>
-                {% endif %}
-            </p>
-            {% if seats %}
-            <form method="post" action="{{ url_for('student_reserve') }}" class="row g-2">
-                <div class="col-md-3">
-                    <select class="form-select" name="seat_id" required>
-                        {% for seat in seats %}
-                        <option value="{{ seat.seat_id }}">{{ seat.seat_no }}</option>
-                        {% endfor %}
-                    </select>
+            <div class="legend small mb-3">
+                <span class="me-3"><i class="dot dot-0"></i>空闲（可预约）</span>
+                <span class="me-3"><i class="dot dot-1"></i>已预约</span>
+                <span class="me-3"><i class="dot dot-2"></i>使用中</span>
+                <span class="me-3"><i class="dot dot-3"></i>故障/维护</span>
+                <span class="text-muted">左侧为靠墙座位，竖条为过道</span>
+            </div>
+            <div class="seat-map">
+                {% for row in item.rows %}
+                <div class="seat-row">
+                    {% for cell in row %}
+                    <button type="button" class="seat state-{{ cell.state }}"
+                            data-id="{{ cell.seat.seat_id }}"
+                            data-no="{{ cell.seat.seat_no }}"
+                            data-room="{{ item.room.room_name }}"
+                            data-state="{{ cell.state }}"
+                            data-text="{{ cell.text }}"
+                            title="{{ cell.seat.seat_no }} {{ cell.text }}">{{ cell.seat.seat_no }}</button>
+                    {% if cell.aisle %}<span class="aisle">过道</span>{% endif %}
+                    {% endfor %}
                 </div>
-                <div class="col-md-3">
-                    <input type="datetime-local" class="form-control" name="start_time" required>
-                </div>
-                <div class="col-md-3">
-                    <input type="datetime-local" class="form-control" name="end_time" required>
-                </div>
-                <div class="col-md-3">
-                    <button class="btn btn-primary w-100" onclick="return checkTime(this)">预约</button>
-                </div>
-            </form>
-            {% endif %}
+                {% endfor %}
+            </div>
+            {% if not item.rows %}<p class="text-muted mb-0">该自习室暂无座位</p>{% endif %}
         </div>
     </div>
     {% else %}
@@ -70,20 +64,77 @@
     {% endfor %}
 </div>
 
+<!-- 座位详情弹窗 -->
+<div class="modal fade" id="seatModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title">座位详情</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1">自习室：<span id="mRoom"></span></p>
+                <p class="mb-1">座位号：<span id="mSeat" class="fw-bold"></span></p>
+                <p class="mb-3">状态：<span id="mState"></span></p>
+
+                <form method="post" action="{{ url_for('student_reserve') }}" id="bookForm" class="d-none">
+                    <input type="hidden" name="seat_id" id="mSeatId">
+                    <div class="mb-2">
+                        <label class="form-label">开始时间</label>
+                        <input type="datetime-local" class="form-control" name="start_time" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">结束时间</label>
+                        <input type="datetime-local" class="form-control" name="end_time" required>
+                    </div>
+                    <button class="btn btn-primary w-100">确认预约</button>
+                </form>
+                <p class="text-danger mb-0 d-none" id="mTip">该座位当前不可预约</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% set msgs = get_flashed_messages() %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// 预约前简单校验时间先后
-function checkTime(btn) {
-    var form = btn.form;
-    if (!form.start_time.value || !form.end_time.value) {
-        alert('请填写预约开始时间和结束时间');
-        return false;
-    }
-    if (form.end_time.value <= form.start_time.value) {
-        alert('结束时间必须晚于开始时间');
-        return false;
-    }
-    return true;
-}
+    var msgs = {{ msgs|tojson }};
+    msgs.forEach(function (m) { alert(m); });
+
+    // 点击座位：显示详情，空闲座位可直接预约
+    document.querySelectorAll('.seat').forEach(function (el) {
+        el.addEventListener('click', function () {
+            document.getElementById('mRoom').textContent = el.dataset.room;
+            document.getElementById('mSeat').textContent = el.dataset.no;
+            document.getElementById('mState').textContent = el.dataset.text;
+            document.getElementById('mSeatId').value = el.dataset.id;
+            var form = document.getElementById('bookForm');
+            var tip = document.getElementById('mTip');
+            if (el.dataset.state === '0') {
+                form.classList.remove('d-none');
+                tip.classList.add('d-none');
+            } else {
+                form.classList.add('d-none');
+                tip.classList.remove('d-none');
+            }
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('seatModal')).show();
+        });
+    });
+
+    // 提交前校验时间
+    document.getElementById('bookForm').addEventListener('submit', function (e) {
+        var start = this.start_time.value;
+        var end = this.end_time.value;
+        if (!start || !end) {
+            alert('请填写预约开始时间和结束时间');
+            e.preventDefault();
+            return;
+        }
+        if (end <= start) {
+            alert('结束时间必须晚于开始时间');
+            e.preventDefault();
+        }
+    });
 </script>
 </body>
 </html>
