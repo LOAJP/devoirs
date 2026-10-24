@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ '全部预约记录' if admin_view else '我的预约记录' }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<nav class="navbar navbar-expand navbar-dark {{ 'bg-dark' if admin_view else 'bg-primary' }}">
+    <div class="container">
+        <span class="navbar-brand">{{ '自习室管理后台' if admin_view else '自习室座位预约' }}</span>
+        <div class="navbar-nav ms-auto">
+            {% if admin_view %}
+            <a class="nav-link text-white" href="{{ url_for('admin_index') }}">首页</a>
+            <a class="nav-link text-white" href="{{ url_for('room_manage') }}">自习室管理</a>
+            <a class="nav-link text-white" href="{{ url_for('seat_manage') }}">座位管理</a>
+            <a class="nav-link text-white" href="{{ url_for('admin_reservations') }}">预约记录</a>
+            {% else %}
+            <a class="nav-link text-white" href="{{ url_for('student_index') }}">自习室列表</a>
+            <a class="nav-link text-white" href="{{ url_for('student_reservations') }}">我的预约</a>
+            <span class="nav-link text-white">{{ session.student_name }}</span>
+            {% endif %}
+            <a class="nav-link text-white" href="{{ url_for('logout') }}">退出</a>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-4">
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            {% for msg in messages %}
+                <div class="alert alert-info py-2">{{ msg }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <h5 class="mb-3">{{ '全部预约记录' if admin_view else '我的预约记录' }}</h5>
+    <table class="table table-bordered bg-white align-middle">
+        <thead>
+        <tr>
+            <th>预约ID</th>
+            {% if admin_view %}<th>学生</th>{% endif %}
+            <th>自习室</th>
+            <th>座位号</th>
+            <th>开始时间</th>
+            <th>结束时间</th>
+            <th>创建时间</th>
+            <th>状态</th>
+            <th>操作</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for r in reservations %}
+        <tr>
+            <td>{{ r.res_id }}</td>
+            {% if admin_view %}<td>{{ r.student_name }}（{{ r.username }}）</td>{% endif %}
+            <td>{{ r.room_name }}</td>
+            <td>{{ r.seat_no }}</td>
+            <td>{{ r.start_time.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ r.end_time.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ r.create_time.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>
+                {% if r.res_status == 0 %}
+                <span class="badge bg-success">有效</span>
+                {% else %}
+                <span class="badge bg-secondary">已取消</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if admin_view %}
+                    {% if r.res_status == 0 %}
+                    <form method="post" action="{{ url_for('admin_cancel', res_id=r.res_id) }}"
+                          onsubmit="return confirm('确定取消该预约？');">
+                        <button class="btn btn-sm btn-outline-danger">取消预约</button>
+                    </form>
+                    {% else %}-{% endif %}
+                {% else %}
+                    {% if r.res_status == 0 and r.start_time > now %}
+                    <form method="post" action="{{ url_for('student_cancel', res_id=r.res_id) }}"
+                          onsubmit="return confirm('确定取消该预约？');">
+                        <button class="btn btn-sm btn-outline-danger">取消预约</button>
+                    </form>
+                    {% else %}-{% endif %}
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="{{ 9 if admin_view else 8 }}" class="text-muted">暂无预约记录</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+</body>
+</html>
