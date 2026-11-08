@@ -252,7 +252,8 @@ def admin_login():
 
 @app.route('/logout')
 def logout():
-    # 仅返回首页，不清除登录状态；登录状态在关闭系统时才销毁
+    # 退出登录只清登录状态，账号与预约数据仍保留在数据库
+    session.clear()
     return redirect(url_for('index'))
 
 
@@ -286,6 +287,11 @@ def student_reserve():
         flash('结束时间必须晚于开始时间')
     elif end_time > close_time:
         flash('结束时间不能晚于打烊时间 22:00')
+    elif query("""SELECT res_id FROM reservation
+                  WHERE student_id=%s AND seat_id=%s AND start_time=%s AND end_time=%s
+                    AND res_status=0""",
+               (session['user_id'], seat_id, start_time, end_time), one=True):
+        pass  # 同一表单重复提交，忽略第二次
     elif query("""SELECT res_id FROM reservation
                   WHERE student_id=%s AND res_status=0 AND end_time>NOW()""",
                (session['user_id'],), one=True):

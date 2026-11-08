@@ -9,6 +9,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
+# 控制台按本机中文代码页输出，避免中文重影
+try { [Console]::OutputEncoding = [Text.Encoding]::GetEncoding(936) } catch { }
+
 # ===== 本机路径与数据库密码，换机器时只改这里 =====
 $MysqlDir = 'C:\xampp\mysql\bin'
 $MysqlIni = 'C:\xampp\mysql\bin\my.ini'
@@ -72,7 +75,7 @@ if (Test-Port 5000) {
     }
     Write-Host '      1) 关闭该进程并继续启动'
     Write-Host '      2) 直接退出'
-    do { $choice = Read-Host '请选择 [1/2]' } while ($choice -ne '1' -and $choice -ne '2')
+    do { $choice = Read-Host '请选择 [1/2]:' } while ($choice -ne '1' -and $choice -ne '2')
     if ($choice -eq '2') {
         Write-Host '已退出' -ForegroundColor Yellow
         exit 1

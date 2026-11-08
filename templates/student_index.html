@@ -156,7 +156,12 @@
         if (end > closeStr) {
             alert('结束时间不能晚于打烊时间 22:00');
             e.preventDefault();
+            return;
         }
+        // 防止重复点击提交
+        var btn = this.querySelector('button');
+        btn.disabled = true;
+        btn.textContent = '提交中...';
     });
 </script>
 </body>
