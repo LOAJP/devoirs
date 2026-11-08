@@ -6,24 +6,32 @@ body {
 .hero {
     padding: 90px 0 70px;
     text-align: center;
-    background: #fff;
+    background: linear-gradient(rgba(17, 24, 39, .62), rgba(17, 24, 39, .62)),
+                url("images/library.jpg") center/cover no-repeat;
     border-bottom: 1px solid #e9ecef;
 }
 
 .hero h1 {
     font-size: 34px;
     font-weight: 700;
-    color: #1f2937;
+    color: #fff;
 }
 
 .hero p {
-    color: #6b7280;
+    color: #e5e7eb;
     margin: 16px 0 34px;
 }
 
 .hero .btn {
     min-width: 150px;
     margin: 0 6px;
+}
+
+/* 导航当前页激活态 */
+.navbar .nav-link.active {
+    color: #fff !important;
+    font-weight: 600;
+    border-bottom: 2px solid #fff;
 }
 
 /* 座位平面图 */

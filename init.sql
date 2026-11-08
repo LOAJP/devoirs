@@ -74,8 +74,4 @@ INSERT INTO seat (room_id, seat_no) VALUES
 -- 故障座位示例
 UPDATE seat SET seat_status = 3 WHERE room_id = 1 AND seat_no IN ('A05', 'A06');
 
--- 演示：李四已预约明天 09:00-11:00 的 A01
-INSERT INTO reservation (student_id, seat_id, start_time, end_time, res_status)
-VALUES (2, 1, TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '09:00:00'),
-        TIMESTAMP(DATE_ADD(CURDATE(), INTERVAL 1 DAY), '11:00:00'), 0);
-UPDATE seat SET seat_status = 1 WHERE seat_id = 1;
+-- 初始不占用座位，A01 保持空闲

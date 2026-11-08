@@ -82,6 +82,26 @@ def admin_required(view):
 
 
 # ---------- 座位与预约辅助 ----------
+CLOSE_HOUR = 22   # 打烊时间，之后清空当天的座位占用
+
+
+def close_shop_cleanup():
+    """打烊后清空当天预约状态与座位占用"""
+    if datetime.now().hour < CLOSE_HOUR:
+        return
+    execute("UPDATE reservation SET res_status=1 WHERE res_status=0 AND end_time <= NOW()")
+    execute("UPDATE seat SET seat_status=0 WHERE seat_status=1")
+
+
+@app.before_request
+def _before_request():
+    if request.endpoint == 'static':
+        return
+    try:
+        close_shop_cleanup()
+    except Exception:
+        pass
+
 def release_expired_seats():
     """惰性释放：有效预约全部结束的座位恢复空闲"""
     execute("""UPDATE seat s SET s.seat_status = 0
@@ -256,10 +276,16 @@ def student_reserve():
     if not seat_id or not start_time or not end_time:
         flash('请选择座位并填写完整的预约时间')
         return redirect(url_for('student_index'))
-    if start_time < datetime.now():
+    now = datetime.now()
+    close_time = now.replace(hour=CLOSE_HOUR, minute=0, second=0, microsecond=0)
+    if start_time.date() != now.date() or end_time.date() != now.date():
+        flash('只能预约当天的座位')
+    elif start_time < now:
         flash('开始时间不能早于当前时间')
     elif end_time <= start_time:
         flash('结束时间必须晚于开始时间')
+    elif end_time > close_time:
+        flash('结束时间不能晚于打烊时间 22:00')
     elif query("""SELECT res_id FROM reservation
                   WHERE student_id=%s AND res_status=0 AND end_time>NOW()""",
                (session['user_id'],), one=True):

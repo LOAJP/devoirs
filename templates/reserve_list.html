@@ -12,13 +12,13 @@
         <span class="navbar-brand">{{ '自习室管理后台' if admin_view else '自习室座位预约' }}</span>
         <div class="navbar-nav ms-auto">
             {% if admin_view %}
-            <a class="nav-link text-white" href="{{ url_for('admin_index') }}">首页</a>
-            <a class="nav-link text-white" href="{{ url_for('room_manage') }}">自习室管理</a>
-            <a class="nav-link text-white" href="{{ url_for('seat_manage') }}">座位管理</a>
-            <a class="nav-link text-white" href="{{ url_for('admin_reservations') }}">预约记录</a>
+            <a class="nav-link text-white {{ 'active' if request.endpoint == 'admin_index' }}" href="{{ url_for('admin_index') }}">首页</a>
+            <a class="nav-link text-white {{ 'active' if request.endpoint == 'room_manage' }}" href="{{ url_for('room_manage') }}">自习室管理</a>
+            <a class="nav-link text-white {{ 'active' if request.endpoint == 'seat_manage' }}" href="{{ url_for('seat_manage') }}">座位管理</a>
+            <a class="nav-link text-white {{ 'active' if request.endpoint == 'admin_reservations' }}" href="{{ url_for('admin_reservations') }}">预约记录</a>
             {% else %}
-            <a class="nav-link text-white" href="{{ url_for('student_index') }}">自习室列表</a>
-            <a class="nav-link text-white" href="{{ url_for('student_reservations') }}">我的预约</a>
+            <a class="nav-link text-white {{ 'active' if request.endpoint == 'student_index' }}" href="{{ url_for('student_index') }}">自习室列表</a>
+            <a class="nav-link text-white {{ 'active' if request.endpoint == 'student_reservations' }}" href="{{ url_for('student_reservations') }}">我的预约</a>
             <span class="nav-link text-white">{{ session.student_name }}</span>
             {% endif %}
             <a class="nav-link text-white" href="{{ url_for('logout') }}">退出</a>

@@ -11,8 +11,8 @@
     <div class="container">
         <span class="navbar-brand">自习室座位预约</span>
         <div class="navbar-nav ms-auto">
-            <a class="nav-link text-white" href="{{ url_for('student_index') }}">自习室列表</a>
-            <a class="nav-link text-white" href="{{ url_for('student_reservations') }}">我的预约</a>
+            <a class="nav-link text-white {{ 'active' if request.endpoint == 'student_index' }}" href="{{ url_for('student_index') }}">自习室列表</a>
+            <a class="nav-link text-white {{ 'active' if request.endpoint == 'student_reservations' }}" href="{{ url_for('student_reservations') }}">我的预约</a>
             <span class="nav-link text-white">{{ session.student_name }}</span>
             <a class="nav-link text-white" href="{{ url_for('logout') }}">退出</a>
             <form method="post" action="{{ url_for('shutdown') }}" class="d-inline"
@@ -83,6 +83,7 @@
 
                 <form method="post" action="{{ url_for('student_reserve') }}" id="bookForm" class="d-none">
                     <input type="hidden" name="seat_id" id="mSeatId">
+                    <p class="text-muted small mb-2">只能预约当天，结束时间不晚于 22:00</p>
                     <div class="mb-2">
                         <label class="form-label">开始时间</label>
                         <input type="datetime-local" class="form-control" name="start_time" required>
@@ -126,6 +127,14 @@
     });
 
     // 提交前校验时间
+    var inputs = document.querySelectorAll('#bookForm input[type=datetime-local]');
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    var d = new Date();
+    var today = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    var nowStr = today + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    var closeStr = today + 'T22:00';
+    inputs.forEach(function (inp) { inp.min = nowStr; inp.max = closeStr; });
+
     document.getElementById('bookForm').addEventListener('submit', function (e) {
         var start = this.start_time.value;
         var end = this.end_time.value;
@@ -134,8 +143,18 @@
             e.preventDefault();
             return;
         }
+        if (start.slice(0, 10) !== today || end.slice(0, 10) !== today) {
+            alert('只能预约当天的座位');
+            e.preventDefault();
+            return;
+        }
         if (end <= start) {
             alert('结束时间必须晚于开始时间');
+            e.preventDefault();
+            return;
+        }
+        if (end > closeStr) {
+            alert('结束时间不能晚于打烊时间 22:00');
             e.preventDefault();
         }
     });
