@@ -19,5 +19,10 @@
     </div>
     <div class="hero-note">本系统仅用于校园自习室座位预约演示</div>
 </div>
+{% set msgs = get_flashed_messages() %}
+<script>
+    var msgs = {{ msgs|tojson }};
+    msgs.forEach(function (m) { alert(m); });
+</script>
 </body>
 </html>

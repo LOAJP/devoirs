@@ -426,6 +426,24 @@ def student_password():
     return redirect(url_for('student_index'))
 
 
+@app.route('/student/delete_account', methods=['POST'])
+@student_required
+def student_delete_account():
+    username = request.form.get('username', '').strip()
+    password = request.form.get('password', '').strip()
+    row = query('SELECT * FROM student WHERE student_id=%s', (session['user_id'],), one=True)
+    if not row or row['username'] != username or row['password'] != password:
+        flash('账号或密码不正确，注销失败')
+        return redirect(url_for('student_index'))
+    # 注销自己：先删预约与禁约记录，再删账号
+    execute('DELETE FROM reservation WHERE student_id=%s', (session['user_id'],))
+    execute('DELETE FROM reservation_ban WHERE student_id=%s', (session['user_id'],))
+    execute('DELETE FROM student WHERE student_id=%s', (session['user_id'],))
+    session.clear()
+    flash('账号已注销')
+    return redirect(url_for('index'))
+
+
 # ---------- 管理员端 ----------
 @app.route('/admin/index')
 @admin_required
@@ -648,8 +666,12 @@ def admin_student_unban(student_id):
 @admin_required
 def admin_student_delete(student_id):
     row = query('SELECT * FROM student WHERE student_id=%s', (student_id,), one=True)
+    admin_pwd = request.form.get('admin_password', '').strip()
     if not row:
         flash('学生不存在')
+    elif not query('SELECT admin_id FROM admin WHERE admin_id=%s AND password=%s',
+                   (session['user_id'], admin_pwd), one=True):
+        flash('管理员密码不正确，注销失败')
     else:
         # 先删除该学生的预约与禁约记录，再注销账号
         execute('DELETE FROM reservation WHERE student_id=%s', (student_id,))

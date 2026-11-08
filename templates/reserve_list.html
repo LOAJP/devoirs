@@ -28,6 +28,7 @@
                     <li><a class="dropdown-item" href="{{ url_for('student_reservations') }}">我的预约</a></li>
                     <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#pwdModal">修改密码</a></li>
                     <li><a class="dropdown-item" href="{{ url_for('logout') }}">退出账号</a></li>
+                    <li><a class="dropdown-item text-danger" href="#" data-bs-toggle="modal" data-bs-target="#delModal">注销账号</a></li>
                 </ul>
             </div>
             {% endif %}
@@ -96,8 +97,33 @@
 </div>
 
 {% if not admin_view %}
-<!-- 修改密码弹窗 -->
-<div class="modal fade" id="pwdModal" tabindex="-1">
+<!-- 注销账号弹窗 -->
+<div class="modal fade" id="delModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title text-danger">注销账号</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" action="{{ url_for('student_delete_account') }}" id="delForm">
+                    <p class="small text-muted">注销后账号与预约记录将全部删除，无法恢复。请输入账号和密码确认。</p>
+                    <div class="mb-2">
+                        <label class="form-label">账号</label>
+                        <input class="form-control" name="username" maxlength="50" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">密码</label>
+                        <input class="form-control" type="password" name="password" maxlength="50" required>
+                    </div>
+                    <button class="btn btn-danger w-100">确认注销</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 修改密码弹窗 --><div class="modal fade" id="pwdModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -132,6 +158,12 @@
     var msgs = {{ msgs|tojson }};
     msgs.forEach(function (m) { alert(m); });
     {% if not admin_view %}
+    // 注销账号：二次确认
+    document.getElementById('delForm').addEventListener('submit', function (e) {
+        if (!confirm('确定注销当前账号？账号与预约记录将被删除，且无法恢复。')) {
+            e.preventDefault();
+        }
+    });
     // 修改密码：两次新密码需一致
     document.getElementById('pwdForm').addEventListener('submit', function (e) {
         if (this.new_password.value !== this.confirm_password.value) {

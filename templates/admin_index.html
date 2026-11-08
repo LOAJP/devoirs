@@ -74,8 +74,8 @@
                     </form>
                     {% endif %}
                     <form method="post" action="{{ url_for('admin_student_delete', student_id=s.student_id) }}"
-                          class="d-inline"
-                          onsubmit="return confirm('注销后该学生的账号与全部预约记录将被删除，确定继续？');">
+                          class="d-inline" onsubmit="return askAdminPwd(this, '注销后该学生的账号与全部预约记录将被删除，确定继续？');">
+                        <input type="hidden" name="admin_password">
                         <button class="btn btn-sm btn-outline-dark">注销账号</button>
                     </form>
                 </div>
@@ -92,6 +92,15 @@
 <script>
     var msgs = {{ msgs|tojson }};
     msgs.forEach(function (m) { alert(m); });
+
+    // 注销学生：需输入管理员密码确认
+    function askAdminPwd(form, tip) {
+        if (!confirm(tip)) { return false; }
+        var pwd = prompt('请输入管理员密码确认注销：');
+        if (pwd === null || pwd === '') { return false; }
+        form.admin_password.value = pwd;
+        return true;
+    }
 </script>
 </body>
 </html>

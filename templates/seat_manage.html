@@ -30,7 +30,7 @@
         <div class="card-body py-3">
             <form method="get" action="{{ url_for('seat_manage') }}" class="row g-2 align-items-center">
                 <div class="col-md-4">
-                    <select class="form-select" name="room_id">
+                    <select class="form-select" name="room_id" onchange="this.form.submit()">
                         {% for room in rooms %}
                         <option value="{{ room.room_id }}"
                                 {% if room.room_id == room_id %}selected{% endif %}>{{ room.room_name }}</option>
@@ -79,6 +79,24 @@
     </div>
     {% endif %}
 
+    {% if room_id %}
+    <!-- 新增座位：紧接座位图下方 -->
+    <div class="card mb-3">
+        <div class="card-body py-3">
+            <form method="post" action="{{ url_for('seat_add') }}" class="row g-2 align-items-center"
+                  onsubmit="return confirm('确定在 {{ room_map.room.room_name if room_map else '所选自习室' }} 新增该座位？');">
+                <input type="hidden" name="room_id" value="{{ room_id }}">
+                <div class="col-md-8">
+                    <input class="form-control" name="seat_no" placeholder="新增座位号，如 A31" maxlength="30" required>
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-primary w-100">新增座位</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- 全部座位 -->
     <table class="table table-bordered bg-white align-middle">
         <thead>
@@ -122,27 +140,6 @@
         {% endfor %}
         </tbody>
     </table>
-
-    {% if room_id %}
-    <!-- 新增座位 -->
-    <div class="card mb-4">
-        <div class="card-header">新增座位</div>
-        <div class="card-body">
-            <form method="post" action="{{ url_for('seat_add') }}" class="row g-2"
-                  onsubmit="return confirm('确定在所选自习室新增该座位？');">
-                <input type="hidden" name="room_id" value="{{ room_id }}">
-                <div class="col-md-5">
-                    <input class="form-control" name="seat_no" placeholder="座位号，如 A31" maxlength="30" required>
-                </div>
-                <div class="col-md-3">
-                    <button class="btn btn-primary w-100">新增座位</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    {% else %}
-    <p class="text-muted">暂无自习室，请先到自习室管理中新增。</p>
-    {% endif %}
 </div>
 
 {% set msgs = get_flashed_messages() %}
