@@ -1,4 +1,8 @@
 # 校园自习室座位预约管理系统
+import os
+import subprocess
+import threading
+import time
 from datetime import datetime
 from functools import wraps
 
@@ -465,5 +469,33 @@ def admin_cancel(res_id):
     return redirect(url_for('admin_reservations'))
 
 
+# ---------- 退出系统 ----------
+MYSQLADMIN = r'C:\xampp\mysql\bin\mysqladmin.exe'
+
+
+def _stop_service():
+    """先停 MySQL 再结束 Flask 进程，数据由 MySQL 自动提交"""
+    time.sleep(0.8)
+    try:
+        if os.path.exists(MYSQLADMIN):
+            r = subprocess.run([MYSQLADMIN, '-u', 'root', '-p' + DB_CONFIG['password'], 'shutdown'],
+                               capture_output=True, timeout=20)
+            if r.returncode != 0:
+                subprocess.run(['taskkill', '/F', '/IM', 'mysqld.exe'], capture_output=True, timeout=10)
+        else:
+            subprocess.run(['taskkill', '/F', '/IM', 'mysqld.exe'], capture_output=True, timeout=10)
+    except Exception:
+        pass
+    os._exit(0)
+
+
+@app.route('/shutdown', methods=['POST'])
+def shutdown():
+    threading.Thread(target=_stop_service, daemon=True).start()
+    return ('<meta charset="utf-8"><div style="font-family:sans-serif;margin:40px">'
+            '系统已退出，可以关闭浏览器窗口。</div>')
+
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    # 关闭自动重载，保证退出时能真正结束进程
+    app.run(debug=True, use_reloader=False)

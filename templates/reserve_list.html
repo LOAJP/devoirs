@@ -22,6 +22,10 @@
             <span class="nav-link text-white">{{ session.student_name }}</span>
             {% endif %}
             <a class="nav-link text-white" href="{{ url_for('logout') }}">退出</a>
+            <form method="post" action="{{ url_for('shutdown') }}" class="d-inline"
+                  onsubmit="return confirm('确定退出并关闭系统？关闭后需重新双击 start.bat 启动。');">
+                <button type="submit" class="btn btn-sm btn-outline-light ms-1">关闭系统</button>
+            </form>
         </div>
     </div>
 </nav>
