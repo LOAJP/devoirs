@@ -1,6 +1,7 @@
 ﻿# 一键启动：MySQL（未运行则启动）→（可选）重建数据 → 启动 Flask 应用
 # 用法：start.bat           直接启动
 #       start.bat -Reset   重建数据库并导入演示数据
+# 若 5000 端口已被占用，会提示：1=关闭占用进程并继续，2=退出
 param(
     [switch]$Reset
 )
@@ -61,8 +62,33 @@ else {
 
 # ---------- 3. 应用 ----------
 if (Test-Port 5000) {
-    Write-Host '[3/3] 5000 端口已被占用，应用可能已在运行' -ForegroundColor Red
-    exit 1
+    Write-Host '[3/3] 5000 端口已被占用' -ForegroundColor Yellow
+    $owners = @(Get-NetTCPConnection -LocalPort 5000 -State Listen -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty OwningProcess -Unique)
+    foreach ($ownerPid in $owners) {
+        $proc = Get-Process -Id $ownerPid -ErrorAction SilentlyContinue
+        if ($proc) { Write-Host ("      占用进程：{0}（PID {1}）" -f $proc.ProcessName, $ownerPid) }
+        else { Write-Host ("      占用进程：PID {0}" -f $ownerPid) }
+    }
+    Write-Host '      1) 关闭该进程并继续启动'
+    Write-Host '      2) 直接退出'
+    do { $choice = Read-Host '请选择 [1/2]' } while ($choice -ne '1' -and $choice -ne '2')
+    if ($choice -eq '2') {
+        Write-Host '已退出' -ForegroundColor Yellow
+        exit 1
+    }
+    foreach ($ownerPid in $owners) {
+        Stop-Process -Id $ownerPid -Force -ErrorAction SilentlyContinue
+    }
+    for ($i = 0; $i -lt 10; $i++) {
+        Start-Sleep -Milliseconds 500
+        if (-not (Test-Port 5000)) { break }
+    }
+    if (Test-Port 5000) {
+        Write-Host '端口仍被占用，无法启动' -ForegroundColor Red
+        exit 1
+    }
+    Write-Host '      端口已释放' -ForegroundColor Green
 }
 if (-not (Test-Path $Python)) { $Python = 'python' }
 
