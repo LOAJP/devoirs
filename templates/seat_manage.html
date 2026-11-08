@@ -25,41 +25,66 @@
 </nav>
 
 <div class="container mt-4">
-    <div class="card mb-4">
-        <div class="card-header">座位管理</div>
-        <div class="card-body">
-            <form method="get" action="{{ url_for('seat_manage') }}" class="row g-2 mb-3">
+    <!-- 查询 -->
+    <div class="card mb-3">
+        <div class="card-body py-3">
+            <form method="get" action="{{ url_for('seat_manage') }}" class="row g-2 align-items-center">
                 <div class="col-md-4">
-                    <select class="form-select" name="room_id" onchange="this.form.submit()">
+                    <select class="form-select" name="room_id">
                         {% for room in rooms %}
                         <option value="{{ room.room_id }}"
                                 {% if room.room_id == room_id %}selected{% endif %}>{{ room.room_name }}</option>
                         {% endfor %}
                     </select>
                 </div>
-            </form>
-
-            {% if room_id %}
-            <form method="post" action="{{ url_for('seat_add') }}" class="row g-2">
-                <input type="hidden" name="room_id" value="{{ room_id }}">
-                <div class="col-md-6">
-                    <input class="form-control" name="seat_no" placeholder="座位号，如 A31" maxlength="30" required>
+                <div class="col-md-4">
+                    <input class="form-control" name="q" value="{{ keyword }}" placeholder="按座位号查询，如 A01">
                 </div>
-                <div class="col-md-6">
-                    <button class="btn btn-primary w-100">新增座位</button>
+                <div class="col-md-4 d-flex gap-2">
+                    <button class="btn btn-primary">查询</button>
+                    <a class="btn btn-outline-secondary" href="{{ url_for('seat_manage', room_id=room_id) }}">全部座位</a>
                 </div>
             </form>
-            {% else %}
-            <p class="text-muted mb-0">暂无自习室，请先到自习室管理中新增。</p>
-            {% endif %}
         </div>
     </div>
 
-    {% if room_id %}
+    {% if room_map %}
+    <!-- 可视化座位图 -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <strong>{{ room_map.room.room_name }}</strong>
+            <span class="badge bg-light text-dark ms-2">空闲 {{ room_map.free }} / 共 {{ room_map.total }}</span>
+        </div>
+        <div class="card-body">
+            <div class="legend small mb-3">
+                <span class="me-3"><i class="dot dot-0"></i>空闲</span>
+                <span class="me-3"><i class="dot dot-1"></i>已预约</span>
+                <span class="me-3"><i class="dot dot-2"></i>使用中</span>
+                <span class="me-3"><i class="dot dot-3"></i>故障/维护</span>
+                <span class="text-muted">左侧为靠墙座位，竖条为过道</span>
+            </div>
+            <div class="seat-map">
+                {% for row in room_map.rows %}
+                <div class="seat-row">
+                    {% for cell in row %}
+                    <span class="seat state-{{ cell.state }}"
+                          title="{{ cell.seat.seat_no }} {{ cell.text }}">{{ cell.seat.seat_no }}</span>
+                    {% if cell.aisle %}<span class="aisle">过道</span>{% endif %}
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+            {% if not room_map.rows %}<p class="text-muted mb-0">该自习室暂无座位</p>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 全部座位 -->
     <table class="table table-bordered bg-white align-middle">
         <thead>
         <tr>
             <th>座位ID</th>
+            <th>自习室</th>
             <th>座位号</th>
             <th>状态</th>
             <th style="width: 300px;">设置状态</th>
@@ -70,12 +95,13 @@
         {% for seat in seats %}
         <tr>
             <td>{{ seat.seat_id }}</td>
+            <td>{{ seat.room_name }}</td>
             <td>{{ seat.seat_no }}</td>
             <td><span class="badge bg-{{ 'success' if seat.seat_status == 0 else 'primary' if seat.seat_status == 1 else 'danger' if seat.seat_status == 2 else 'secondary' }}">{{ state_text[seat.seat_status] }}</span></td>
             <td>
                 <form method="post" action="{{ url_for('seat_status') }}" class="d-flex gap-1">
                     <input type="hidden" name="seat_id" value="{{ seat.seat_id }}">
-                    <input type="hidden" name="room_id" value="{{ room_id }}">
+                    <input type="hidden" name="room_id" value="{{ seat.room_id }}">
                     <select class="form-select form-select-sm" name="seat_status">
                         {% for value, text in state_text.items() %}
                         <option value="{{ value }}" {% if seat.seat_status == value %}selected{% endif %}>{{ text }}</option>
@@ -86,16 +112,36 @@
             </td>
             <td>
                 <form method="post" action="{{ url_for('seat_delete', seat_id=seat.seat_id) }}"
-                      onsubmit="return confirm('确定删除该座位？');">
+                      onsubmit="return confirm('确定删除座位 {{ seat.room_name }} {{ seat.seat_no }}？');">
                     <button class="btn btn-sm btn-outline-danger">删除</button>
                 </form>
             </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="text-muted">该自习室暂无座位</td></tr>
+        <tr><td colspan="6" class="text-muted">没有符合条件的座位</td></tr>
         {% endfor %}
         </tbody>
     </table>
+
+    {% if room_id %}
+    <!-- 新增座位 -->
+    <div class="card mb-4">
+        <div class="card-header">新增座位</div>
+        <div class="card-body">
+            <form method="post" action="{{ url_for('seat_add') }}" class="row g-2"
+                  onsubmit="return confirm('确定在所选自习室新增该座位？');">
+                <input type="hidden" name="room_id" value="{{ room_id }}">
+                <div class="col-md-5">
+                    <input class="form-control" name="seat_no" placeholder="座位号，如 A31" maxlength="30" required>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100">新增座位</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <p class="text-muted">暂无自习室，请先到自习室管理中新增。</p>
     {% endif %}
 </div>
 

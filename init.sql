@@ -47,6 +47,15 @@ CREATE TABLE reservation (
     CONSTRAINT fk_res_seat FOREIGN KEY (seat_id) REFERENCES seat (seat_id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 禁止预约记录表（原有 5 张表字段不变，此表只存禁约期限）
+CREATE TABLE reservation_ban (
+    ban_id INT PRIMARY KEY AUTO_INCREMENT,
+    student_id INT NOT NULL,
+    ban_until DATETIME NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ban_student FOREIGN KEY (student_id) REFERENCES student (student_id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 初始账号
 INSERT INTO admin (username, password) VALUES ('admin', '123456');
 INSERT INTO student (username, password, student_name) VALUES

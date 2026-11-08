@@ -32,13 +32,18 @@
                 <div class="col-md-4">
                     <input class="form-control" name="room_name" placeholder="自习室名称" maxlength="100" required>
                 </div>
-                <div class="col-md-5">
+                <div class="col-md-4">
                     <input class="form-control" name="remark" placeholder="备注（可空）" maxlength="200">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
+                    <input class="form-control" type="number" name="seat_count" value="30"
+                           min="0" max="200" placeholder="座位数" title="自动生成座位数">
+                </div>
+                <div class="col-md-2">
                     <button class="btn btn-primary w-100">新增</button>
                 </div>
             </form>
+            <div class="form-text mt-1">座位数会按房间顺序自动生成座位号（如第 3 间为 C01、C02……），可填 0 后到座位管理逐个添加。</div>
         </div>
     </div>
 

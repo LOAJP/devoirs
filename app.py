@@ -3,7 +3,7 @@ import os
 import subprocess
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 import pymysql
@@ -60,6 +60,22 @@ def execute(sql, args=()):
         conn.close()
 
 
+def insert_return_id(sql, args=()):
+    """插入并返回自增主键"""
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql, args)
+            new_id = cur.lastrowid
+        conn.commit()
+        return new_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 # ---------- 权限装饰器 ----------
 def student_required(view):
     @wraps(view)
@@ -93,11 +109,18 @@ def close_shop_cleanup():
     execute("UPDATE seat SET seat_status=0 WHERE seat_status=1")
 
 
+_ban_ready = False
+
+
 @app.before_request
 def _before_request():
+    global _ban_ready
     if request.endpoint == 'static':
         return
     try:
+        if not _ban_ready:
+            ensure_ban_table()
+            _ban_ready = True
         close_shop_cleanup()
     except Exception:
         pass
@@ -118,6 +141,32 @@ def release_seat(seat_id):
                  AND NOT EXISTS (SELECT 1 FROM reservation r
                                  WHERE r.seat_id = %s AND r.res_status = 0 AND r.end_time > NOW())""",
             (seat_id, seat_id))
+
+
+def ensure_ban_table():
+    """禁止预约记录表（原有 5 张表字段不变，此表仅存禁约期限）"""
+    execute("""CREATE TABLE IF NOT EXISTS reservation_ban (
+                   ban_id INT PRIMARY KEY AUTO_INCREMENT,
+                   student_id INT NOT NULL,
+                   ban_until DATETIME NOT NULL,
+                   create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                   CONSTRAINT fk_ban_student FOREIGN KEY (student_id)
+                       REFERENCES student (student_id) ON DELETE RESTRICT
+               ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""")
+
+
+def active_ban(student_id):
+    """学生当前是否处于禁止预约状态"""
+    return query("""SELECT ban_until FROM reservation_ban
+                    WHERE student_id = %s AND ban_until > NOW()
+                    ORDER BY ban_until DESC LIMIT 1""", (student_id,), one=True)
+
+
+def ban_text(ban_until):
+    """禁约说明：长期或截止时间"""
+    if ban_until.year >= 2099:
+        return '长期禁止预约'
+    return '禁止预约至 ' + ban_until.strftime('%Y-%m-%d %H:%M')
 
 
 def parse_time(value):
@@ -265,7 +314,9 @@ def student_index():
     hold = query("""SELECT res_id FROM reservation
                     WHERE student_id=%s AND res_status=0 AND end_time>NOW()""",
                  (session['user_id'],), one=True)
-    return render_template('student_index.html', rooms=rooms, has_active=bool(hold))
+    ban = active_ban(session['user_id'])
+    return render_template('student_index.html', rooms=rooms, has_active=bool(hold),
+                           ban_msg=ban_text(ban['ban_until']) if ban else '')
 
 
 @app.route('/student/reserve', methods=['POST'])
@@ -276,6 +327,10 @@ def student_reserve():
     end_time = parse_time(request.form.get('end_time', ''))
     if not seat_id or not start_time or not end_time:
         flash('请选择座位并填写完整的预约时间')
+        return redirect(url_for('student_index'))
+    ban = active_ban(session['user_id'])
+    if ban:
+        flash('您已被' + ban_text(ban['ban_until']) + '，暂不能预约')
         return redirect(url_for('student_index'))
     now = datetime.now()
     close_time = now.replace(hour=CLOSE_HOUR, minute=0, second=0, microsecond=0)
@@ -350,11 +405,39 @@ def student_cancel(res_id):
     return redirect(url_for('student_reservations'))
 
 
+@app.route('/student/password', methods=['POST'])
+@student_required
+def student_password():
+    old = request.form.get('old_password', '').strip()
+    new = request.form.get('new_password', '').strip()
+    confirm = request.form.get('confirm_password', '').strip()
+    row = query('SELECT password FROM student WHERE student_id=%s', (session['user_id'],), one=True)
+    if not row or row['password'] != old:
+        flash('原密码不正确')
+    elif not new or len(new) > 50:
+        flash('新密码不能为空且不超过50个字符')
+    elif new != confirm:
+        flash('两次输入的新密码不一致')
+    elif new == old:
+        flash('新密码不能与原密码相同')
+    else:
+        execute('UPDATE student SET password=%s WHERE student_id=%s', (new, session['user_id']))
+        flash('密码修改成功')
+    return redirect(url_for('student_index'))
+
+
 # ---------- 管理员端 ----------
 @app.route('/admin/index')
 @admin_required
 def admin_index():
-    students = query('SELECT student_id, username, student_name FROM student ORDER BY student_id')
+    students = query("""SELECT st.student_id, st.username, st.student_name,
+                               (SELECT MAX(b.ban_until) FROM reservation_ban b
+                                 WHERE b.student_id = st.student_id AND b.ban_until > NOW()) AS ban_until,
+                               (SELECT COUNT(*) FROM reservation r
+                                 WHERE r.student_id = st.student_id) AS res_count
+                        FROM student st ORDER BY st.student_id""")
+    for s in students:
+        s['ban_text'] = ban_text(s['ban_until']) if s['ban_until'] else ''
     return render_template('admin_index.html', students=students)
 
 
@@ -372,13 +455,22 @@ def room_manage():
 def room_add():
     room_name = request.form.get('room_name', '').strip()
     remark = request.form.get('remark', '').strip()
+    seat_count = request.form.get('seat_count', type=int) or 0
     if not room_name:
         flash('自习室名称不能为空')
     elif len(room_name) > 100 or len(remark) > 200:
         flash('名称不能超过100字符，备注不能超过200字符')
+    elif seat_count < 0 or seat_count > 200:
+        flash('座位数量需在 0 到 200 之间')
     else:
-        execute('INSERT INTO study_room (room_name, remark) VALUES (%s, %s)', (room_name, remark or None))
-        flash('新增自习室成功')
+        room_id = insert_return_id('INSERT INTO study_room (room_name, remark) VALUES (%s, %s)',
+                                   (room_name, remark or None))
+        # 按房间序号生成座位号：第 1 间 A01…，第 3 间 C01…
+        prefix = chr(64 + room_id) if 1 <= room_id <= 26 else 'S%d' % room_id
+        for i in range(1, seat_count + 1):
+            execute('INSERT INTO seat (room_id, seat_no) VALUES (%s, %s)',
+                    (room_id, '%s%02d' % (prefix, i)))
+        flash('新增自习室成功，已生成 %d 个座位' % seat_count)
     return redirect(url_for('room_manage'))
 
 
@@ -417,9 +509,27 @@ def seat_manage():
     room_id = request.args.get('room_id', type=int)
     if room_id is None and rooms:
         room_id = rooms[0]['room_id']
-    seats = query('SELECT * FROM seat WHERE room_id=%s ORDER BY seat_id', (room_id,)) if room_id else []
+    keyword = request.args.get('q', '').strip()
+
+    # 当前自习室的可视化座位图
+    room_map = None
+    for item in build_seat_map():
+        if item['room']['room_id'] == room_id:
+            room_map = item
+            break
+
+    if keyword:
+        # 座位查询：跨自习室按座位号模糊匹配
+        seats = query("""SELECT s.*, sr.room_name FROM seat s
+                         JOIN study_room sr ON s.room_id = sr.room_id
+                         WHERE s.seat_no LIKE %s ORDER BY s.room_id, s.seat_id""",
+                      ('%' + keyword + '%',))
+    else:
+        seats = query("""SELECT s.*, sr.room_name FROM seat s
+                         JOIN study_room sr ON s.room_id = sr.room_id
+                         WHERE s.room_id = %s ORDER BY s.seat_id""", (room_id,)) if room_id else []
     return render_template('seat_manage.html', rooms=rooms, seats=seats, room_id=room_id,
-                           state_text=SEAT_STATE_TEXT)
+                           room_map=room_map, keyword=keyword, state_text=SEAT_STATE_TEXT)
 
 
 @app.route('/admin/seat/add', methods=['POST'])
@@ -499,6 +609,54 @@ def admin_cancel(res_id):
         release_seat(row['seat_id'])
         flash('已取消该预约，座位已释放')
     return redirect(url_for('admin_reservations'))
+
+
+# ---------- 学生账号管理 ----------
+@app.route('/admin/student/ban', methods=['POST'])
+@admin_required
+def admin_student_ban():
+    student_id = request.form.get('student_id', type=int)
+    mode = request.form.get('mode', 'timed')
+    days = request.form.get('days', type=int) or 0
+    if not query('SELECT student_id FROM student WHERE student_id=%s', (student_id,), one=True):
+        flash('学生不存在')
+    elif mode == 'long':
+        execute('DELETE FROM reservation_ban WHERE student_id=%s', (student_id,))
+        execute('INSERT INTO reservation_ban (student_id, ban_until) VALUES (%s, %s)',
+                (student_id, '2099-12-31 23:59:59'))
+        flash('已长期禁止该学生预约座位')
+    elif days < 1 or days > 30:
+        flash('禁止天数需在 1 到 30 天之间')
+    else:
+        until = datetime.now() + timedelta(days=days)
+        execute('DELETE FROM reservation_ban WHERE student_id=%s', (student_id,))
+        execute('INSERT INTO reservation_ban (student_id, ban_until) VALUES (%s, %s)',
+                (student_id, until))
+        flash('已禁止该学生预约 %d 天，至 %s' % (days, until.strftime('%Y-%m-%d %H:%M')))
+    return redirect(url_for('admin_index'))
+
+
+@app.route('/admin/student/unban/<int:student_id>', methods=['POST'])
+@admin_required
+def admin_student_unban(student_id):
+    execute('DELETE FROM reservation_ban WHERE student_id=%s', (student_id,))
+    flash('已恢复该学生的预约权限')
+    return redirect(url_for('admin_index'))
+
+
+@app.route('/admin/student/delete/<int:student_id>', methods=['POST'])
+@admin_required
+def admin_student_delete(student_id):
+    row = query('SELECT * FROM student WHERE student_id=%s', (student_id,), one=True)
+    if not row:
+        flash('学生不存在')
+    else:
+        # 先删除该学生的预约与禁约记录，再注销账号
+        execute('DELETE FROM reservation WHERE student_id=%s', (student_id,))
+        execute('DELETE FROM reservation_ban WHERE student_id=%s', (student_id,))
+        execute('DELETE FROM student WHERE student_id=%s', (student_id,))
+        flash('已注销学生账号：%s' % row['username'])
+    return redirect(url_for('admin_index'))
 
 
 # ---------- 退出系统 ----------

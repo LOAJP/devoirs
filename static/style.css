@@ -99,6 +99,23 @@ body {
     background: #6c757d;
 }
 
+/* 管理端座位图为 span，需居中显示 */
+.seat-map span.seat {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 学生姓名下拉：鼠标悬停即展开 */
+.user-menu:hover > .dropdown-menu {
+    display: block;
+    margin-top: 0;
+}
+
+.user-menu .dropdown-menu {
+    min-width: 170px;
+}
+
 .aisle {
     width: 18px;
     color: #adb5bd;

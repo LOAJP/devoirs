@@ -26,12 +26,15 @@
 
 <div class="container mt-4">
     <h5 class="mb-3">注册学生账号列表</h5>
-    <table class="table table-bordered bg-white">
+    <table class="table table-bordered bg-white align-middle">
         <thead>
         <tr>
             <th>学生ID</th>
             <th>账号</th>
             <th>姓名</th>
+            <th>预约记录</th>
+            <th>预约权限</th>
+            <th style="width: 380px;">操作</th>
         </tr>
         </thead>
         <tbody>
@@ -40,9 +43,46 @@
             <td>{{ s.student_id }}</td>
             <td>{{ s.username }}</td>
             <td>{{ s.student_name }}</td>
+            <td>{{ s.res_count }} 条</td>
+            <td>
+                {% if s.ban_text %}
+                <span class="badge bg-danger">{{ s.ban_text }}</span>
+                {% else %}
+                <span class="badge bg-success">可预约</span>
+                {% endif %}
+            </td>
+            <td>
+                <div class="d-flex flex-wrap gap-1 align-items-center">
+                    <form method="post" action="{{ url_for('admin_student_ban') }}" class="d-inline"
+                          onsubmit="return confirm('确定长期禁止 {{ s.student_name }} 预约座位？');">
+                        <input type="hidden" name="student_id" value="{{ s.student_id }}">
+                        <input type="hidden" name="mode" value="long">
+                        <button class="btn btn-sm btn-outline-danger">长期禁止</button>
+                    </form>
+                    <form method="post" action="{{ url_for('admin_student_ban') }}" class="d-flex gap-1"
+                          onsubmit="return confirm('确定限时禁止 {{ s.student_name }} 预约座位？');">
+                        <input type="hidden" name="student_id" value="{{ s.student_id }}">
+                        <input type="hidden" name="mode" value="timed">
+                        <input class="form-control form-control-sm" style="width: 70px;" type="number"
+                               name="days" value="7" min="1" max="30" title="禁止天数，最多30天">
+                        <button class="btn btn-sm btn-outline-warning text-nowrap">限制天数</button>
+                    </form>
+                    {% if s.ban_text %}
+                    <form method="post" action="{{ url_for('admin_student_unban', student_id=s.student_id) }}"
+                          class="d-inline" onsubmit="return confirm('确定恢复该学生的预约权限？');">
+                        <button class="btn btn-sm btn-outline-success">恢复权限</button>
+                    </form>
+                    {% endif %}
+                    <form method="post" action="{{ url_for('admin_student_delete', student_id=s.student_id) }}"
+                          class="d-inline"
+                          onsubmit="return confirm('注销后该学生的账号与全部预约记录将被删除，确定继续？');">
+                        <button class="btn btn-sm btn-outline-dark">注销账号</button>
+                    </form>
+                </div>
+            </td>
         </tr>
         {% else %}
-        <tr><td colspan="3" class="text-muted">暂无注册学生</td></tr>
+        <tr><td colspan="6" class="text-muted">暂无注册学生</td></tr>
         {% endfor %}
         </tbody>
     </table>
