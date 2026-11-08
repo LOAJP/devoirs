@@ -2,17 +2,30 @@ body {
     background: #f6f7f9;
 }
 
-/* 首页 */
+/* 首页：整屏背景图，内容居中 */
+html,
+body {
+    height: 100%;
+}
+
 .hero {
-    padding: 90px 0 70px;
+    position: relative;
+    min-height: 100vh;
+    padding: 40px 16px 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     background: linear-gradient(rgba(17, 24, 39, .62), rgba(17, 24, 39, .62)),
                 url("images/library.jpg") center/cover no-repeat;
-    border-bottom: 1px solid #e9ecef;
+}
+
+.hero-inner {
+    max-width: 720px;
 }
 
 .hero h1 {
-    font-size: 34px;
+    font-size: 38px;
     font-weight: 700;
     color: #fff;
 }
@@ -22,9 +35,18 @@ body {
     margin: 16px 0 34px;
 }
 
-.hero .btn {
+.hero-actions .btn {
     min-width: 150px;
     margin: 0 6px;
+}
+
+.hero-note {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 18px;
+    color: rgba(255, 255, 255, .78);
+    font-size: 13px;
 }
 
 /* 导航当前页激活态 */

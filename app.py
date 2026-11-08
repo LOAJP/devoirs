@@ -252,7 +252,7 @@ def admin_login():
 
 @app.route('/logout')
 def logout():
-    session.clear()
+    # 仅返回首页，不清除登录状态；登录状态在关闭系统时才销毁
     return redirect(url_for('index'))
 
 
@@ -517,6 +517,8 @@ def _stop_service():
 
 @app.route('/shutdown', methods=['POST'])
 def shutdown():
+    # 关闭系统时才销毁登录状态
+    session.clear()
     threading.Thread(target=_stop_service, daemon=True).start()
     return ('<meta charset="utf-8"><div style="font-family:sans-serif;margin:40px">'
             '系统已退出，可以关闭浏览器窗口。</div>')
